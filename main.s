@@ -1,13 +1,3 @@
-# Desenvolva um código em assembly que deve apresentar um menu com as seguintes opções:
-# 
-# 1 - Preencher matriz NxM
-# 2 - Buscar elemento na matriz
-# 3 - Mostrar diagonal principal
-# 4 - Mostrar lucky numbers (Um lucky number é o menor elemento de sua linha e o maior em sua coluna)
-# 5 - Sair e mostrar uma boa mensagem
-# 
-# Pode ser feito em duplas.
-
     .data
 linhasmsg:  .asciz "Quantas linhas?\n"
 colmsg:     .asciz "Quantas colunas?\n"
@@ -20,7 +10,9 @@ saidadebug: .asciz "%d\n"
 elemmsg:    .asciz "Qual elemento deseja encontrar?\n"
 encmsg:     .asciz "Elemento encontrado na posição (%d, %d)\n"
 nencmsg:    .asciz "Elemento não encontrado na matriz.\n"
-
+lnmsg:      .asciz "Os lucky numbers são: "
+lnelem:     .asciz "%d "
+nlnmsg:     .asciz "Não existe lucky number nessa matriz.\n"
 intentrada: .asciz "%d"
 num:        .long 0
 linhas:     .long 0
@@ -28,11 +20,43 @@ colunas:    .long 0
 matriz:     .long 0
 vetln:      .long 0
 qtln:       .long 0
+saida:      .asciz "Muito obrigado por usar este humilde programa ;^)\n"
+menu:
+    .ascii "O que deseja fazer?\n"
+    .ascii "1 - Preencher matriz NxM.\n"
+    .ascii "2 - Buscar elemento na matriz\n"
+    .ascii "3 - Mostrar diagonal princial.\n"
+    .ascii "4 - Mostar lucky numbers.\n"
+    .asciz "0 - Sair.\n"
 
     .text
     .globl main
 
 main:
+main_loop:  
+    pushl $menu
+    call printf
+    addl $4, %esp
+
+    pushl $num
+    pushl $intentrada
+    call scanf
+    addl $8, %esp
+
+    movl num, %eax
+    cmpl $0, %eax
+    je sair
+    cmpl $1, %eax
+    je chama_preenche
+    cmpl $2, %eax
+    je chama_busca
+    cmpl $3, %eax
+    je chama_diaprin
+    cmpl $4, %eax
+    je chama_ln
+    jmp main_loop
+
+chama_preenche: 
     pushl $linhasmsg
     call printf
     pushl $linhas
@@ -60,13 +84,23 @@ main:
     call malloc
     movl %eax, vetln
     addl $4, %esp
-    
+
     call preenche_matriz
     call printa_matriz
-    call printa_diagonal
+    jmp main_loop
+chama_busca:    
     call buscar_elemento
-    call encontrar_lucky_numbers
+    jmp main_loop
+chama_diaprin:  
+    call printa_diagonal
+    jmp main_loop
+chama_ln:   
+    call encontra_lucky_numbers
+    jmp main_loop
 
+sair:
+    pushl $saida
+    call printf
     pushl $0
     call exit
 
@@ -186,7 +220,7 @@ pd_loop:
     addl matriz, %eax
     pushl %ebx
     pushl (%eax)
-    pushl $elemento
+    pushl $lnelem
     call printf
     addl $8, %esp
     popl %ebx
@@ -254,94 +288,122 @@ be_fim:
     addl $4, %esp
     ret
 
-encontrar_lucky_numbers:
-    xorl %eax, %eax
-    xorl %ebx, %ebx
+encontra_lucky_numbers:
+    pushl %ebp
+    movl %esp, %ebp
+    subl $32, %esp
+    movl $0, qtln
+    movl $0, -4(%ebp)           # i = linha atual
 eln_loop:
-    cmpl linhas, %eax
+    movl linhas, %eax
+    cmpl %eax, -4(%ebp)
     je eln_fim
-    pushl %eax
+    movl $0, -8(%ebp)           # j = coluna atual
 eln_loop_colunas:
-    cmpl colunas, %ebx
+    movl colunas, %eax
+    cmpl %eax, -8(%ebp)
     je eln_colunas_fim
 
-    pushl %eax
-    movl colunas, %ecx
-    mull %ecx
-    addl %ebx, %eax
-    pushl %eax
+    ## linha * colunas + coluna = [i,j]
+    mull -4(%ebp)
+    addl -8(%ebp), %eax
+    movl $4, %ebx
     mull %ebx
-    movl $4, %ecx
-    mull %ecx
     addl matriz, %eax
     movl (%eax), %eax
-    movl %eax, num
-    popl %eax
+    movl %eax, -12(%ebp)        # elemento pos [i,j]
 eln_percorre_linhas:
-    xorl %eax, %eax
+    movl $0, -16(%ebp)          # i_aux = linha atual
 elnpl_loop:
-    cmpl linhas, %eax
+    movl linhas, %eax
+    cmpl %eax, -16(%ebp)
     je eln_percorre_colunas
 
-    pushl %eax
+    movl colunas, %eax
+    mull -16(%ebp)
+    addl -8(%ebp), %eax
+    movl $4, %ebx
     mull %ebx
-    movl $4, %ecx
-    mull %ecx
     addl matriz, %eax
     movl (%eax), %eax
-    cmpl num, %eax
-    jg elnpl_maior
-    popl %eax
-    incl %eax
+    movl %eax, -20(%ebp)        # elemento encontrado
+    movl -12(%ebp), %eax
+    cmpl %eax, -20(%ebp)
+    jg falha_comp
+    incl -16(%ebp)
     jmp elnpl_loop
-elnpl_maior:
-    incl %ebx
-    popl %eax
+falha_comp:
+    incl -8(%ebp)
     jmp eln_loop_colunas
 eln_percorre_colunas:
-    popl %eax
-    pushl %ebx
-    xorl %ebx, %ebx
+    movl $0, -16(%ebp)          # j_aux = coluna atual
 elnpc_loop:
-    cmpl colunas, %ebx
+    movl colunas, %eax
+    cmpl %eax, -16(%ebp)
     je elnpc_fim
 
-    pushl %eax
+    movl colunas, %eax
+    mull -4(%ebp)
+    addl -16(%ebp), %eax
+    movl $4, %ebx
     mull %ebx
-    movl $4, %ecx
-    mull %ecx
     addl matriz, %eax
     movl (%eax), %eax
-    cmpl num, %eax
-    jl elnpc_menor
-    popl %eax
-    incl %ebx
+    movl %eax, -20(%ebp)
+    movl -12(%ebp), %eax
+    cmpl %eax, -20(%ebp)
+    jl falha_comp
+    incl -16(%ebp)
     jmp elnpc_loop
-elnpc_menor:
-    popl %eax
-    popl %ebx
-    incl %ebx
-    jmp eln_loop_colunas
 elnpc_fim:
-    popl %ebx
-
-    pushl %eax
     movl qtln, %eax
-    movl $4, %ecx
-    mull %ecx
+    movl $4, %ebx
+    mull %ebx
     addl vetln, %eax
-    movl num, %ecx
-    movl %ecx, (%eax)
+    movl -12(%ebp), %ebx
+    movl %ebx, (%eax)
     movl qtln, %eax
     incl %eax
     movl %eax, qtln
-    popl %eax
-    incl %ebx
+    incl -8(%ebp)
     jmp eln_loop_colunas
 eln_colunas_fim:
-    popl %eax
-    incl %eax
-    xorl %ebx, %ebx
+    incl -4(%ebp)
+    movl $0, -8(%ebp)
     jmp eln_loop
 eln_fim:
+print_lucky_numbers:
+    movl $0, %eax
+    cmpl qtln, %eax
+    je zero_ln
+    pushl $lnmsg
+    call printf
+    addl $4, %esp
+    movl $0, -4(%ebp)
+pl_loop:
+    movl qtln, %eax
+    cmpl %eax, -4(%ebp)
+    je pl_fim
+
+    movl -4(%ebp), %eax
+    movl $4, %ebx
+    mull %ebx
+    addl vetln, %eax
+    pushl (%eax)
+    pushl $lnelem
+    call printf
+    addl $8, %esp
+    incl -4(%ebp)
+    jmp pl_loop
+zero_ln:
+    pushl $nlnmsg
+    call printf
+    movl %ebp, %esp
+    popl %ebp
+    ret
+pl_fim:
+    pushl $newline
+    call printf
+    movl %ebp, %esp
+    popl %ebp
     ret
